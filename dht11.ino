@@ -7,7 +7,9 @@
 #include <PubSubClient.h>
 #include <SimpleDHT.h>
 
-int pinDHT11 = 2;                  //IO2
+int pinDHT11 = 2;  //IO2
+int pinIo1 = 1; //光线强度传感器
+int io1State = 0;
 SimpleDHT11 dht11(pinDHT11);
 
 const char* ssid = "WeWork";//手机Wi-Fi热点名
@@ -19,7 +21,6 @@ PubSubClient client(espClient);
 long lastMsg = 0;
 char msg[50];
 int value = 0;
-int ledPin = 2; // GPIO2 of ESP8266
 
 int lastTemperature = 0;
 int lastHumidity = 0;
@@ -55,7 +56,7 @@ void reconnect() {
 }
 
 void setup() {
-  pinMode(ledPin, INPUT);
+  pinMode(pinIo1,INPUT);
   Serial.begin(115200);
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -63,6 +64,10 @@ void setup() {
 }
 
 void readTempAndHumidity(){
+  io1State = digitalRead(pinIo1);
+  String stateTmp = String("电平状态：");
+  stateTmp+=io1State;
+  Serial.println(stateTmp.c_str());
   byte temperature = 0;
   byte humidity = 0;
   int err = SimpleDHTErrSuccess;
@@ -70,21 +75,6 @@ void readTempAndHumidity(){
     Serial.print("Read DHT11 failed, err="); Serial.println(err);delay(1000);
     return;
   }
-  //  String tmp = "{";            //字符串拼接
-  //  tmp += String('"');
-  //  tmp += String("temperature");
-  //  tmp += String('"');
-  //  tmp += String(':');
-  //  tmp += String(temperature);
-  //  tmp += String(',');
-  //  tmp += String('"');
-  //  tmp += String("humidity");
-  //  tmp += String('"');
-  //  tmp += String(":");
-  //  tmp += String(humidity);
-  //  tmp += String("}");
-  // client.publish("/trumeen/publish", tmp.c_str());     // 连接成功发送主题和消息
-  
   Serial.print((int)temperature); Serial.print(" *C, "); 
   Serial.print((int)humidity); Serial.println(" H");
    if((int)temperature!=lastTemperature){
