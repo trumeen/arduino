@@ -8,7 +8,7 @@
 #include <SimpleDHT.h>
 
 int pinDHT11 = 2;  //IO2
-int pinIo1 = 1; //光线强度传感器
+int pinIo1 = 0; //IO0光线强度传感器
 int io1State = 0;
 SimpleDHT11 dht11(pinDHT11);
 
