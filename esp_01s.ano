@@ -1,0 +1,140 @@
+/*
+通过ESP-01S基于
+ * 基于ESP-01S的温湿度采集上报与万能遥控器（由于使用的红外模块限制，只能学习电视的，无法学习空调的，后续继续改进）
+*/
+
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+#include <SimpleDHT.h>
+
+
+byte remoreData[12][5] = {
+  {0xA1,0xF1,0x00,0xBF,0x0D},
+  
+  };
+
+//IO1 引脚电平
+int io1State = 0;
+
+//ESP_01S IO定义 IO1
+int pinIo1 = 0;
+
+//ESP_01S IO定义 IO2(读取DHT11 温度)
+int pinDHT11 = 2;  
+
+SimpleDHT11 dht11(pinDHT11);
+
+//Wi-Fi 名称
+const char* ssid = "Cheery";
+
+//Wi-Fi密码
+const char* password = "111222aa";
+
+//mqtt 服务器地址
+const char* mqtt_server = "192.168.71.165";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+long lastMsg = 0;
+char msg[50];
+int value = 0;
+
+//上一次温度值
+int lastTemperature = 0;
+//上一次湿度值
+int lastHumidity = 0;
+
+/**
+ * 配置WIFI
+ */
+void setup_wifi() {
+  delay(10);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  randomSeed(micros());
+}
+
+/**
+ * MQTT 消息回调
+ * @topic 消息主题
+ * @payload 信息内容
+ * @length 数据长度
+ */
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("接收消息[");Serial.print(topic);Serial.print("] ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+}
+
+/*
+ * 重连连接
+ */
+void reconnect() {
+    String clientId = "ESP-01A-";
+    clientId += String(random(0xffff), HEX);
+     //连接成功
+    if (client.connect(clientId.c_str())) {        
+      //订阅按键消息
+      client.subscribe("trumeen/home/living_room/tv/set");
+      // 连接成功发送主题和消息
+      client.publish("trumeen/home/temperature/state", "ONLINE");     
+    } else {
+      // Wait 5 seconds before retrying
+      delay(5000);                                  
+    }
+}
+
+void setup() {
+  pinMode(pinIo1,INPUT);
+  Serial.begin(9600);
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+}
+
+void readTempAndHumidity(){
+  io1State = digitalRead(pinIo1);
+  String stateTmp = String("电平状态：");
+  stateTmp+=io1State;
+  Serial.println(stateTmp.c_str());
+  byte temperature = 0;
+  byte humidity = 0;
+  int err = SimpleDHTErrSuccess;
+  if ((err = dht11.read(&temperature, &humidity, NULL)) != SimpleDHTErrSuccess) {
+    Serial.print("Read DHT11 failed, err="); Serial.println(err);delay(1000);
+    return;
+  }
+  Serial.print((int)temperature); Serial.print(" *C, "); 
+  Serial.print((int)humidity); Serial.println(" H");
+   if((int)temperature!=lastTemperature){
+      String temp = "";
+      temp+=(int)temperature;
+      client.publish("trumeen/home/temperature/value", temp.c_str());     // 连接成功发送主题和消息
+     lastTemperature = (int)temperature;
+   }
+  
+  if((int)humidity!=lastHumidity){
+      String temp = "";
+      temp+=(int)humidity;
+      client.publish("trumeen/home/humidity/value", temp.c_str());     
+      lastHumidity = (int)humidity;
+  }
+  delay(1500);
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+//  byte data[5] = {0xA1,0xF1,0x00,0xBF,0x0D};
+//  Serial.write(data,5);
+  
+  readTempAndHumidity();
+}
